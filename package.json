@@ -33,7 +33,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.0.3",
-    "pkg": "^5.8.1",
+    "@yao-pkg/pkg": "^6.12.0",
     "typescript": "^5.9.3",
     "vitest": "^3.0.0"
   },
