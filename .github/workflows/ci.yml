@@ -58,7 +58,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Run security tests
-        run: pnpm test -- --grep "Security|SSRF|Secrets|Rate"
+        run: pnpm test -- -t "Security|SSRF|Secrets|Rate"
 
   docker:
     runs-on: ubuntu-latest
