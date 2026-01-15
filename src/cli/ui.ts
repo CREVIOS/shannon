@@ -13,7 +13,11 @@ export function showHelp(): void {
   console.log(chalk.gray('Automated security assessment tool\n'));
 
   console.log(chalk.yellow.bold('USAGE:'));
+  console.log('  shannon run <WEB_URL> <REPO_PATH> [--config config.yaml] [--output /path/to/reports]');
   console.log('  shannon <WEB_URL> <REPO_PATH> [--config config.yaml] [--output /path/to/reports]');
+  console.log('  shannon monitor [--session <id> | --repo <path> | --latest]');
+  console.log('  shannon status [--session <id> | --repo <path> | --latest]');
+  console.log('  shannon sessions [--json]');
   console.log('  shannon server [--config config.yaml] [--host 127.0.0.1] [--port 8080] [--api-key key]\n');
 
   console.log(chalk.yellow.bold('OPTIONS:'));
@@ -41,10 +45,13 @@ export function showHelp(): void {
   console.log('  --help               Show this help message\n');
 
   console.log(chalk.yellow.bold('EXAMPLES:'));
+  console.log('  shannon run "https://example.com" "/path/to/local/repo"');
   console.log('  shannon "https://example.com" "/path/to/local/repo"');
   console.log('  shannon "https://example.com" "/path/to/local/repo" --config auth.yaml');
   console.log('  shannon "https://example.com" "/path/to/local/repo" --output /path/to/reports');
-  console.log('  shannon "https://example.com" "/path/to/local/repo" --pipeline-testing\n');
+  console.log('  shannon "https://example.com" "/path/to/local/repo" --pipeline-testing');
+  console.log('  shannon monitor --latest');
+  console.log('  shannon status --session 2f1a9b3c');
   console.log('  shannon server --config configs/example-config.yaml --host 127.0.0.1 --port 8080\n');
 
   console.log(chalk.yellow.bold('REQUIREMENTS:'));

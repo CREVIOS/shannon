@@ -479,7 +479,7 @@ const handleGenerateKey = (
 };
 
 // Main request router
-const createRequestHandler = (
+export const createRequestHandler = (
   apiKey: string,
   configPath: string | undefined,
   ciConfig: CiConfig | undefined
