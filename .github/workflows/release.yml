@@ -43,7 +43,7 @@ jobs:
           RELEASE_NAME="shannon-${GITHUB_REF_NAME}-${RUNNER_OS}"
           ARCHIVE="release/${RELEASE_NAME}.tar.gz"
           tar -czf "${ARCHIVE}" dist mcp-server/dist package.json README.md LICENSE CHANGELOG.md
-          node -e "const fs=require('fs');const crypto=require('crypto');const path=require('path');const file=process.argv[1];const data=fs.readFileSync(file);const hash=crypto.createHash('sha256').update(data).digest('hex');fs.writeFileSync(file+'.sha256', hash+'  '+path.basename(file)+'\n');" "${ARCHIVE}"
+          node -e "const fs=require('fs');const crypto=require('crypto');const path=require('path');const file=process.argv[1];const data=fs.readFileSync(file);const hash=crypto.createHash('sha256').update(data).digest('hex');fs.writeFileSync(file+'.sha256', hash+'  '+path.basename(file)+'\\n');" "${ARCHIVE}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
