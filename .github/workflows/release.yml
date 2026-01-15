@@ -35,6 +35,28 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Build binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${RUNNER_OS}" in
+            Linux) TARGET="node20-linux-x64" ;;
+            macOS)
+              if [ "${RUNNER_ARCH}" = "ARM64" ]; then
+                TARGET="node20-macos-arm64"
+              else
+                TARGET="node20-macos-x64"
+              fi
+              ;;
+            Windows) TARGET="node20-win-x64" ;;
+            *) echo "Unsupported OS: ${RUNNER_OS}" && exit 1 ;;
+          esac
+          mkdir -p build
+          pnpm exec pkg dist/shannon.js --targets "${TARGET}" --output build/shannon
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            mv build/shannon build/shannon.exe
+          fi
+
       - name: Package artifacts
         shell: bash
         run: |
@@ -42,8 +64,21 @@ jobs:
           mkdir -p release
           RELEASE_NAME="shannon-${GITHUB_REF_NAME}-${RUNNER_OS}"
           ARCHIVE="release/${RELEASE_NAME}.tar.gz"
-          tar -czf "${ARCHIVE}" dist mcp-server/dist package.json README.md LICENSE CHANGELOG.md
+          tar -czf "${ARCHIVE}" dist mcp-server/dist prompts configs package.json README.md LICENSE CHANGELOG.md
           node -e "const fs=require('fs');const crypto=require('crypto');const path=require('path');const file=process.argv[1];const data=fs.readFileSync(file);const hash=crypto.createHash('sha256').update(data).digest('hex');fs.writeFileSync(file+'.sha256', hash+'  '+path.basename(file)+'\\n');" "${ARCHIVE}"
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            ZIP="release/${RELEASE_NAME}.zip"
+            powershell -NoProfile -Command "Compress-Archive -Force -Path dist,mcp-server/dist,prompts,configs,package.json,README.md,LICENSE,CHANGELOG.md -DestinationPath '${ZIP}'"
+            node -e "const fs=require('fs');const crypto=require('crypto');const path=require('path');const file=process.argv[1];const data=fs.readFileSync(file);const hash=crypto.createHash('sha256').update(data).digest('hex');fs.writeFileSync(file+'.sha256', hash+'  '+path.basename(file)+'\\n');" "${ZIP}"
+          fi
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            BINARY_NAME="shannon-${GITHUB_REF_NAME}-${RUNNER_OS}.exe"
+            cp build/shannon.exe "release/${BINARY_NAME}"
+          else
+            BINARY_NAME="shannon-${GITHUB_REF_NAME}-${RUNNER_OS}"
+            cp build/shannon "release/${BINARY_NAME}"
+          fi
+          node -e "const fs=require('fs');const crypto=require('crypto');const path=require('path');const file=process.argv[1];const data=fs.readFileSync(file);const hash=crypto.createHash('sha256').update(data).digest('hex');fs.writeFileSync(file+'.sha256', hash+'  '+path.basename(file)+'\\n');" "release/${BINARY_NAME}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

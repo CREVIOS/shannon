@@ -6,6 +6,7 @@
   "description": "AI-powered security testing framework with Claude",
   "scripts": {
     "build": "tsc && tsc -p mcp-server/tsconfig.json",
+    "build:binary": "pkg dist/shannon.js",
     "start": "node ./dist/shannon.js",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -32,8 +33,20 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.0.3",
+    "pkg": "^5.8.1",
     "typescript": "^5.9.3",
     "vitest": "^3.0.0"
+  },
+  "pkg": {
+    "assets": [
+      "prompts/**/*",
+      "configs/**/*",
+      "package.json"
+    ],
+    "scripts": [
+      "dist/**/*.js",
+      "mcp-server/dist/**/*.js"
+    ]
   },
   "engines": {
     "node": ">=20.0.0"
