@@ -57,7 +57,7 @@ jobs:
           else
             OUTPUT="build/shannon"
           fi
-          pnpm exec pkg dist/shannon.js --targets "${TARGET}" --output "${OUTPUT}" --no-bytecode
+          pnpm exec pkg dist/shannon.js --targets "${TARGET}" --output "${OUTPUT}"
 
       - name: Package artifacts
         shell: bash

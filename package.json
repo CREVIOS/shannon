@@ -6,7 +6,7 @@
   "description": "AI-powered security testing framework with Claude",
   "scripts": {
     "build": "tsc && tsc -p mcp-server/tsconfig.json",
-    "build:binary": "pkg dist/shannon.js --no-bytecode",
+    "build:binary": "pkg dist/shannon.js",
     "start": "node ./dist/shannon.js",
     "test": "vitest run",
     "test:watch": "vitest",

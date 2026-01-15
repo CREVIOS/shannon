@@ -780,210 +780,222 @@ async function main(
   }
 }
 
-// Entry point - handle both direct node execution and shebang execution
-let args = process.argv.slice(2);
-// If first arg is the script name (from shebang), remove it
-if (args[0] && args[0].includes('shannon')) {
-  args = args.slice(1);
-}
+async function runCli(): Promise<void> {
+  // Entry point - handle both direct node execution and shebang execution
+  let args = process.argv.slice(2);
+  // If first arg is the script name (from shebang), remove it
+  if (args[0] && args[0].includes('shannon')) {
+    args = args.slice(1);
+  }
 
-if (args[0] === 'server') {
-  const { startApiServer } = await import('./api/server.js');
-  await startApiServer(args.slice(1));
-  process.exit(0);
-}
+  if (args[0] === 'server') {
+    const { startApiServer } = await import('./api/server.js');
+    await startApiServer(args.slice(1));
+    return;
+  }
 
-if (args[0] === 'monitor') {
-  const { runMonitor } = await import('./cli/monitor.js');
-  await runMonitor(args.slice(1));
-  process.exit(0);
-}
+  if (args[0] === 'monitor') {
+    const { runMonitor } = await import('./cli/monitor.js');
+    await runMonitor(args.slice(1));
+    return;
+  }
 
-if (args[0] === 'sessions') {
-  const { listSessionsCommand } = await import('./cli/monitor.js');
-  await listSessionsCommand(args.slice(1));
-  process.exit(0);
-}
+  if (args[0] === 'sessions') {
+    const { listSessionsCommand } = await import('./cli/monitor.js');
+    await listSessionsCommand(args.slice(1));
+    return;
+  }
 
-if (args[0] === 'status') {
-  const { runMonitor } = await import('./cli/monitor.js');
-  await runMonitor(['--once', ...args.slice(1)]);
-  process.exit(0);
-}
+  if (args[0] === 'status') {
+    const { runMonitor } = await import('./cli/monitor.js');
+    await runMonitor(['--once', ...args.slice(1)]);
+    return;
+  }
 
-if (args[0] === 'run') {
-  args = args.slice(1);
-}
+  if (args[0] === 'run') {
+    args = args.slice(1);
+  }
 
-// Parse flags and arguments
-let configPath: string | null = null;
-let outputPath: string | null = null;
-let pipelineTestingMode = false;
-let disableLoader = false;
-let ciEnabled: boolean | undefined;
-let ciPlatforms: CiOptions['platforms'] | undefined;
-let ciFailOn: CiOptions['failOn'] | undefined;
-const nonFlagArgs: string[] = [];
+  // Parse flags and arguments
+  let configPath: string | null = null;
+  let outputPath: string | null = null;
+  let pipelineTestingMode = false;
+  let disableLoader = false;
+  let ciEnabled: boolean | undefined;
+  let ciPlatforms: CiOptions['platforms'] | undefined;
+  let ciFailOn: CiOptions['failOn'] | undefined;
+  const nonFlagArgs: string[] = [];
 
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--config') {
-    if (i + 1 < args.length) {
-      configPath = args[i + 1]!;
-      i++; // Skip the next argument
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--config') {
+      if (i + 1 < args.length) {
+        configPath = args[i + 1]!;
+        i++; // Skip the next argument
+      } else {
+        console.log(chalk.red('❌ --config flag requires a file path'));
+        process.exit(1);
+      }
+    } else if (args[i] === '--output') {
+      if (i + 1 < args.length) {
+        outputPath = path.resolve(args[i + 1]!);
+        i++; // Skip the next argument
+      } else {
+        console.log(chalk.red('❌ --output flag requires a directory path'));
+        process.exit(1);
+      }
+    } else if (args[i] === '--pipeline-testing') {
+      pipelineTestingMode = true;
+    } else if (args[i] === '--disable-loader') {
+      disableLoader = true;
+    } else if (args[i] === '--ci') {
+      ciEnabled = true;
+    } else if (args[i] === '--ci-platforms') {
+      if (i + 1 < args.length) {
+        const raw = args[i + 1]!;
+        ciPlatforms = raw.split(',').map((p) => p.trim()).filter(Boolean) as CiOptions['platforms'];
+        i++;
+      } else {
+        console.log(chalk.red('❌ --ci-platforms flag requires a comma-separated list'));
+        process.exit(1);
+      }
+    } else if (args[i] === '--ci-fail-on') {
+      if (i + 1 < args.length) {
+        ciFailOn = args[i + 1] as CiOptions['failOn'];
+        i++;
+      } else {
+        console.log(chalk.red('❌ --ci-fail-on flag requires a severity value'));
+        process.exit(1);
+      }
+    } else if (!args[i]!.startsWith('-')) {
+      nonFlagArgs.push(args[i]!);
+    }
+  }
+
+  // Handle help flag
+  if (args.includes('--help') || args.includes('-h') || args.includes('help')) {
+    showHelp();
+    process.exit(0);
+  }
+
+  // Handle no arguments - show help
+  if (nonFlagArgs.length === 0) {
+    console.log(chalk.red.bold('❌ Error: No arguments provided\n'));
+    showHelp();
+    process.exit(1);
+  }
+
+  // Handle insufficient arguments
+  if (nonFlagArgs.length < 2) {
+    console.log(chalk.red('❌ Both WEB_URL and REPO_PATH are required'));
+    console.log(chalk.gray('Usage: shannon <WEB_URL> <REPO_PATH> [--config config.yaml]'));
+    console.log(chalk.gray('Help:  shannon --help'));
+    process.exit(1);
+  }
+
+  const [webUrl, repoPath] = nonFlagArgs;
+
+  // Validate web URL
+  const webUrlValidation = validateWebUrl(webUrl!);
+  if (!webUrlValidation.valid) {
+    console.log(chalk.red(`❌ Invalid web URL: ${webUrlValidation.error}`));
+    console.log(chalk.gray(`Expected format: https://example.com`));
+    process.exit(1);
+  }
+
+  // Validate repository path
+  const repoPathValidation = await validateRepoPath(repoPath!);
+  if (!repoPathValidation.valid) {
+    console.log(chalk.red(`❌ Invalid repository path: ${repoPathValidation.error}`));
+    console.log(chalk.gray(`Expected: Accessible local directory path`));
+    process.exit(1);
+  }
+
+  // Success - show validated inputs
+  console.log(chalk.green('✅ Input validation passed:'));
+  console.log(chalk.gray(`   Target Web URL: ${webUrl}`));
+  console.log(chalk.gray(`   Target Repository: ${repoPathValidation.path}\n`));
+  console.log(chalk.gray(`   Config Path: ${configPath}\n`));
+  if (outputPath) {
+    console.log(chalk.gray(`   Output Path: ${outputPath}\n`));
+  }
+  if (pipelineTestingMode) {
+    console.log(chalk.yellow('⚡ PIPELINE TESTING MODE ENABLED - Using minimal test prompts for fast pipeline validation\n'));
+  }
+  if (disableLoader) {
+    console.log(chalk.yellow('⚙️  LOADER DISABLED - Progress indicator will not be shown\n'));
+  }
+
+  try {
+    const ciCliOptions: Partial<CiOptions> = {
+      ...(ciEnabled !== undefined && { enabled: ciEnabled }),
+      ...(ciPlatforms && { platforms: ciPlatforms }),
+      ...(ciFailOn && { failOn: ciFailOn }),
+    };
+
+    const result = await main(
+      webUrl!,
+      repoPathValidation.path!,
+      configPath,
+      pipelineTestingMode,
+      disableLoader,
+      outputPath,
+      ciCliOptions
+    );
+    console.log(chalk.green.bold('\n📄 FINAL REPORT AVAILABLE:'));
+    console.log(chalk.cyan(result.reportPath));
+    console.log(chalk.green.bold('\n📂 AUDIT LOGS AVAILABLE:'));
+    console.log(chalk.cyan(result.auditLogsPath));
+    if (result.findingsPath) {
+      console.log(chalk.green.bold('\n🧾 FINDINGS JSON AVAILABLE:'));
+      console.log(chalk.cyan(result.findingsPath));
+    }
+    if (result.compliancePath) {
+      console.log(chalk.green.bold('\n✅ COMPLIANCE REPORT AVAILABLE:'));
+      console.log(chalk.cyan(result.compliancePath));
+    }
+    if (result.sarifPath) {
+      console.log(chalk.green.bold('\n📦 SARIF REPORT AVAILABLE:'));
+      console.log(chalk.cyan(result.sarifPath));
+    }
+    if (result.gitlabPath) {
+      console.log(chalk.green.bold('\n📦 GITLAB SAST REPORT AVAILABLE:'));
+      console.log(chalk.cyan(result.gitlabPath));
+    }
+    if (result.ciExitCode !== undefined) {
+      process.exitCode = result.ciExitCode;
+    }
+
+  } catch (error) {
+    // Enhanced error boundary with proper logging
+    if (error instanceof PentestError) {
+      await logError(error, 'Main execution failed');
+      console.log(chalk.red.bold('\n🚨 PENTEST EXECUTION FAILED'));
+      console.log(chalk.red(`   Type: ${error.type}`));
+      console.log(chalk.red(`   Retryable: ${error.retryable ? 'Yes' : 'No'}`));
+
+      if (error.retryable) {
+        console.log(chalk.yellow('   Consider running the command again or checking network connectivity.'));
+      }
     } else {
-      console.log(chalk.red('❌ --config flag requires a file path'));
-      process.exit(1);
+      const err = error as Error;
+      console.log(chalk.red.bold('\n🚨 UNEXPECTED ERROR OCCURRED'));
+      console.log(chalk.red(`   Error: ${err?.message || err?.toString() || 'Unknown error'}`));
+
+      if (process.env.DEBUG) {
+        console.log(chalk.gray(`   Stack: ${err?.stack || 'No stack trace available'}`));
+      }
     }
-  } else if (args[i] === '--output') {
-    if (i + 1 < args.length) {
-      outputPath = path.resolve(args[i + 1]!);
-      i++; // Skip the next argument
-    } else {
-      console.log(chalk.red('❌ --output flag requires a directory path'));
-      process.exit(1);
-    }
-  } else if (args[i] === '--pipeline-testing') {
-    pipelineTestingMode = true;
-  } else if (args[i] === '--disable-loader') {
-    disableLoader = true;
-  } else if (args[i] === '--ci') {
-    ciEnabled = true;
-  } else if (args[i] === '--ci-platforms') {
-    if (i + 1 < args.length) {
-      const raw = args[i + 1]!;
-      ciPlatforms = raw.split(',').map((p) => p.trim()).filter(Boolean) as CiOptions['platforms'];
-      i++;
-    } else {
-      console.log(chalk.red('❌ --ci-platforms flag requires a comma-separated list'));
-      process.exit(1);
-    }
-  } else if (args[i] === '--ci-fail-on') {
-    if (i + 1 < args.length) {
-      ciFailOn = args[i + 1] as CiOptions['failOn'];
-      i++;
-    } else {
-      console.log(chalk.red('❌ --ci-fail-on flag requires a severity value'));
-      process.exit(1);
-    }
-  } else if (!args[i]!.startsWith('-')) {
-    nonFlagArgs.push(args[i]!);
+
+    process.exit(1);
   }
 }
 
-// Handle help flag
-if (args.includes('--help') || args.includes('-h') || args.includes('help')) {
-  showHelp();
-  process.exit(0);
-}
-
-// Handle no arguments - show help
-if (nonFlagArgs.length === 0) {
-  console.log(chalk.red.bold('❌ Error: No arguments provided\n'));
-  showHelp();
+void runCli().catch((error) => {
+  const err = error as Error;
+  console.error(chalk.red.bold('\n🚨 FATAL ERROR'));
+  console.error(chalk.red(`   Error: ${err?.message || err?.toString() || 'Unknown error'}`));
+  if (process.env.DEBUG) {
+    console.error(chalk.gray(`   Stack: ${err?.stack || 'No stack trace available'}`));
+  }
   process.exit(1);
-}
-
-// Handle insufficient arguments
-if (nonFlagArgs.length < 2) {
-  console.log(chalk.red('❌ Both WEB_URL and REPO_PATH are required'));
-  console.log(chalk.gray('Usage: shannon <WEB_URL> <REPO_PATH> [--config config.yaml]'));
-  console.log(chalk.gray('Help:  shannon --help'));
-  process.exit(1);
-}
-
-const [webUrl, repoPath] = nonFlagArgs;
-
-// Validate web URL
-const webUrlValidation = validateWebUrl(webUrl!);
-if (!webUrlValidation.valid) {
-  console.log(chalk.red(`❌ Invalid web URL: ${webUrlValidation.error}`));
-  console.log(chalk.gray(`Expected format: https://example.com`));
-  process.exit(1);
-}
-
-// Validate repository path
-const repoPathValidation = await validateRepoPath(repoPath!);
-if (!repoPathValidation.valid) {
-  console.log(chalk.red(`❌ Invalid repository path: ${repoPathValidation.error}`));
-  console.log(chalk.gray(`Expected: Accessible local directory path`));
-  process.exit(1);
-}
-
-// Success - show validated inputs
-console.log(chalk.green('✅ Input validation passed:'));
-console.log(chalk.gray(`   Target Web URL: ${webUrl}`));
-console.log(chalk.gray(`   Target Repository: ${repoPathValidation.path}\n`));
-console.log(chalk.gray(`   Config Path: ${configPath}\n`));
-if (outputPath) {
-  console.log(chalk.gray(`   Output Path: ${outputPath}\n`));
-}
-if (pipelineTestingMode) {
-  console.log(chalk.yellow('⚡ PIPELINE TESTING MODE ENABLED - Using minimal test prompts for fast pipeline validation\n'));
-}
-if (disableLoader) {
-  console.log(chalk.yellow('⚙️  LOADER DISABLED - Progress indicator will not be shown\n'));
-}
-
-try {
-  const ciCliOptions: Partial<CiOptions> = {
-    ...(ciEnabled !== undefined && { enabled: ciEnabled }),
-    ...(ciPlatforms && { platforms: ciPlatforms }),
-    ...(ciFailOn && { failOn: ciFailOn }),
-  };
-
-  const result = await main(
-    webUrl!,
-    repoPathValidation.path!,
-    configPath,
-    pipelineTestingMode,
-    disableLoader,
-    outputPath,
-    ciCliOptions
-  );
-  console.log(chalk.green.bold('\n📄 FINAL REPORT AVAILABLE:'));
-  console.log(chalk.cyan(result.reportPath));
-  console.log(chalk.green.bold('\n📂 AUDIT LOGS AVAILABLE:'));
-  console.log(chalk.cyan(result.auditLogsPath));
-  if (result.findingsPath) {
-    console.log(chalk.green.bold('\n🧾 FINDINGS JSON AVAILABLE:'));
-    console.log(chalk.cyan(result.findingsPath));
-  }
-  if (result.compliancePath) {
-    console.log(chalk.green.bold('\n✅ COMPLIANCE REPORT AVAILABLE:'));
-    console.log(chalk.cyan(result.compliancePath));
-  }
-  if (result.sarifPath) {
-    console.log(chalk.green.bold('\n📦 SARIF REPORT AVAILABLE:'));
-    console.log(chalk.cyan(result.sarifPath));
-  }
-  if (result.gitlabPath) {
-    console.log(chalk.green.bold('\n📦 GITLAB SAST REPORT AVAILABLE:'));
-    console.log(chalk.cyan(result.gitlabPath));
-  }
-  if (result.ciExitCode !== undefined) {
-    process.exitCode = result.ciExitCode;
-  }
-
-} catch (error) {
-  // Enhanced error boundary with proper logging
-  if (error instanceof PentestError) {
-    await logError(error, 'Main execution failed');
-    console.log(chalk.red.bold('\n🚨 PENTEST EXECUTION FAILED'));
-    console.log(chalk.red(`   Type: ${error.type}`));
-    console.log(chalk.red(`   Retryable: ${error.retryable ? 'Yes' : 'No'}`));
-
-    if (error.retryable) {
-      console.log(chalk.yellow('   Consider running the command again or checking network connectivity.'));
-    }
-  } else {
-    const err = error as Error;
-    console.log(chalk.red.bold('\n🚨 UNEXPECTED ERROR OCCURRED'));
-    console.log(chalk.red(`   Error: ${err?.message || err?.toString() || 'Unknown error'}`));
-
-    if (process.env.DEBUG) {
-      console.log(chalk.gray(`   Stack: ${err?.stack || 'No stack trace available'}`));
-    }
-  }
-
-  process.exit(1);
-}
+});

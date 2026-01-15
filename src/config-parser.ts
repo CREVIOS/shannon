@@ -34,24 +34,32 @@ const addFormats: FormatsPlugin = require('ajv-formats');
 const ajv = new Ajv({ allErrors: true, verbose: true });
 addFormats(ajv);
 
-// Load JSON Schema
-let configSchema: object;
-let validateSchema: ValidateFunction;
+// Load JSON Schema lazily (avoid top-level await for packaging)
+let validateSchema: ValidateFunction | null = null;
+let schemaLoadPromise: Promise<void> | null = null;
 
-try {
-  const schemaPath = new URL('../configs/config-schema.json', import.meta.url);
-  const schemaContent = await fs.readFile(schemaPath, 'utf8');
-  configSchema = JSON.parse(schemaContent) as object;
-  validateSchema = ajv.compile(configSchema);
-} catch (error) {
-  const errMsg = error instanceof Error ? error.message : String(error);
-  throw new PentestError(
-    `Failed to load configuration schema: ${errMsg}`,
-    'config',
-    false,
-    { schemaPath: '../configs/config-schema.json', originalError: errMsg }
-  );
-}
+const ensureSchemaLoaded = async (): Promise<void> => {
+  if (validateSchema) return;
+  if (!schemaLoadPromise) {
+    schemaLoadPromise = (async () => {
+      try {
+        const schemaPath = new URL('../configs/config-schema.json', import.meta.url);
+        const schemaContent = await fs.readFile(schemaPath, 'utf8');
+        const configSchema = JSON.parse(schemaContent) as object;
+        validateSchema = ajv.compile(configSchema);
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        throw new PentestError(
+          `Failed to load configuration schema: ${errMsg}`,
+          'config',
+          false,
+          { schemaPath: '../configs/config-schema.json', originalError: errMsg }
+        );
+      }
+    })();
+  }
+  await schemaLoadPromise;
+};
 
 // Security patterns to block
 const DANGEROUS_PATTERNS: RegExp[] = [
@@ -82,6 +90,8 @@ const INTERNAL_HOSTNAME_PATTERNS = [
 // Parse and load YAML configuration file with enhanced safety
 export const parseConfig = async (configPath: string): Promise<Config> => {
   try {
+    await ensureSchemaLoaded();
+
     // File existence check
     if (!(await fs.pathExists(configPath))) {
       throw new Error(`Configuration file not found: ${configPath}`);
@@ -160,6 +170,10 @@ const validateConfig = (config: Config): void => {
   }
 
   // JSON Schema validation
+  if (!validateSchema) {
+    throw new Error('Configuration schema not loaded');
+  }
+
   const isValid = validateSchema(config);
   if (!isValid) {
     const errors = validateSchema.errors || [];
