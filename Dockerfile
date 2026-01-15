@@ -109,23 +109,21 @@ RUN addgroup -g 1001 pentest && \
 WORKDIR /app
 
 # Copy package files first for better caching
-COPY package*.json ./
-COPY mcp-server/package*.json ./mcp-server/
+COPY package.json pnpm-lock.yaml ./
 
-# Install Node.js dependencies (including devDependencies for TypeScript build)
-RUN npm ci && \
-    cd mcp-server && npm ci && cd .. && \
-    npm cache clean --force
+# Install pnpm and Node.js dependencies (including devDependencies for TypeScript build)
+RUN npm install -g pnpm@9 && \
+    pnpm install --frozen-lockfile && \
+    pnpm store prune
 
 # Copy application source code
 COPY . .
 
-# Build TypeScript (mcp-server first, then main project)
-RUN cd mcp-server && npm run build && cd .. && npm run build
+# Build TypeScript (includes mcp-server build step)
+RUN pnpm run build
 
 # Remove devDependencies after build to reduce image size
-RUN npm prune --production && \
-    cd mcp-server && npm prune --production
+RUN pnpm prune --prod
 
 # Create directories for session data and ensure proper permissions
 RUN mkdir -p /app/sessions /app/deliverables /app/repos /app/configs && \
