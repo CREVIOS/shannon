@@ -4,7 +4,7 @@
 // it under the terms of the GNU Affero General Public License version 3
 // as published by the Free Software Foundation.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   resolveCiOptions,
   computeCiExitCode,
@@ -33,6 +33,16 @@ const createFinding = (severity: string, id: string = 'F001'): Finding => ({
 });
 
 describe('CI Module', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
+  });
+
   describe('resolveCiOptions', () => {
     it('should use defaults when no config or CLI options', () => {
       const options = resolveCiOptions(undefined, {});

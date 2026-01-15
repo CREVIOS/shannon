@@ -43,6 +43,7 @@ import { validateWebUrl, validateRepoPath } from './cli/input-validator.js';
 
 // Error Handling
 import { PentestError, logError } from './error-handling.js';
+import { createSession, updateSessionStatus, type Session } from './session-store.js';
 
 import type { DistributedConfig } from './types/config.js';
 import type { Config } from './types/config.js';
@@ -56,80 +57,7 @@ declare global {
   var SHANNON_DISABLE_LOADER: boolean | undefined;
 }
 
-// Session Lock File Management
-const STORE_PATH = path.join(process.cwd(), '.shannon-store.json');
-
-interface Session {
-  id: string;
-  webUrl: string;
-  repoPath: string;
-  status: 'in-progress' | 'completed' | 'failed';
-  startedAt: string;
-}
-
-interface SessionStore {
-  sessions: Session[];
-}
-
-function generateSessionId(): string {
-  return crypto.randomUUID();
-}
-
-async function loadSessions(): Promise<SessionStore> {
-  try {
-    if (await fs.pathExists(STORE_PATH)) {
-      return await fs.readJson(STORE_PATH) as SessionStore;
-    }
-  } catch {
-    // Corrupted file, start fresh
-  }
-  return { sessions: [] };
-}
-
-async function saveSessions(store: SessionStore): Promise<void> {
-  await fs.writeJson(STORE_PATH, store, { spaces: 2 });
-}
-
-async function createSession(webUrl: string, repoPath: string): Promise<Session> {
-  const store = await loadSessions();
-
-  // Check for existing in-progress session
-  const existing = store.sessions.find(
-    s => s.repoPath === repoPath && s.status === 'in-progress'
-  );
-  if (existing) {
-    throw new PentestError(
-      `Session already in progress for ${repoPath}`,
-      'validation',
-      false,
-      { sessionId: existing.id }
-    );
-  }
-
-  const session: Session = {
-    id: generateSessionId(),
-    webUrl,
-    repoPath,
-    status: 'in-progress',
-    startedAt: new Date().toISOString()
-  };
-
-  store.sessions.push(session);
-  await saveSessions(store);
-  return session;
-}
-
-async function updateSessionStatus(
-  sessionId: string,
-  status: 'in-progress' | 'completed' | 'failed'
-): Promise<void> {
-  const store = await loadSessions();
-  const session = store.sessions.find(s => s.id === sessionId);
-  if (session) {
-    session.status = status;
-    await saveSessions(store);
-  }
-}
+// Session store helpers live in session-store.ts
 
 interface PromptVariables {
   webUrl: string;
@@ -634,7 +562,7 @@ async function main(
   const variables: PromptVariables = { webUrl, repoPath, sourceDir };
 
   // Create session (acts as lock file)
-  const session: Session = await createSession(webUrl, repoPath);
+  const session: Session = await createSession(webUrl, repoPath, outputPath ?? undefined);
   console.log(chalk.blue(`Session created: ${session.id.substring(0, 8)}...`));
 
   // Session metadata for audit logging
@@ -863,6 +791,28 @@ if (args[0] === 'server') {
   const { startApiServer } = await import('./api/server.js');
   await startApiServer(args.slice(1));
   process.exit(0);
+}
+
+if (args[0] === 'monitor') {
+  const { runMonitor } = await import('./cli/monitor.js');
+  await runMonitor(args.slice(1));
+  process.exit(0);
+}
+
+if (args[0] === 'sessions') {
+  const { listSessionsCommand } = await import('./cli/monitor.js');
+  await listSessionsCommand(args.slice(1));
+  process.exit(0);
+}
+
+if (args[0] === 'status') {
+  const { runMonitor } = await import('./cli/monitor.js');
+  await runMonitor(['--once', ...args.slice(1)]);
+  process.exit(0);
+}
+
+if (args[0] === 'run') {
+  args = args.slice(1);
 }
 
 // Parse flags and arguments

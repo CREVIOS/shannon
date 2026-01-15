@@ -102,7 +102,7 @@ export class AuditSession {
     await this.currentLogger.initialize();
 
     // Start metrics tracking
-    this.metricsTracker.startAgent(agentName, attemptNumber);
+    await this.metricsTracker.startAgent(agentName, attemptNumber);
 
     // Log start event
     await this.currentLogger.logEvent('agent_start', {

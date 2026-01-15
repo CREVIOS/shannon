@@ -36,6 +36,10 @@ interface AgentMetrics {
   final_duration_ms: number;
   total_cost_usd: number;
   checkpoint?: string;
+  current_attempt?: {
+    attempt_number: number;
+    started_at: string;
+  };
 }
 
 interface PhaseMetrics {
@@ -136,11 +140,33 @@ export class MetricsTracker {
   /**
    * Start tracking an agent execution
    */
-  startAgent(agentName: string, attemptNumber: number): void {
+  async startAgent(agentName: string, attemptNumber: number): Promise<void> {
+    if (!this.data) {
+      throw new Error('MetricsTracker not initialized');
+    }
+
     this.activeTimers.set(agentName, {
       startTime: Date.now(),
       attemptNumber,
     });
+
+    if (!this.data.metrics.agents[agentName]) {
+      this.data.metrics.agents[agentName] = {
+        status: 'in-progress',
+        attempts: [],
+        final_duration_ms: 0,
+        total_cost_usd: 0,
+      };
+    }
+
+    const agent = this.data.metrics.agents[agentName]!;
+    agent.status = 'in-progress';
+    agent.current_attempt = {
+      attempt_number: attemptNumber,
+      started_at: formatTimestamp(),
+    };
+
+    await this.save();
   }
 
   /**
@@ -162,6 +188,7 @@ export class MetricsTracker {
     }
 
     const agent = this.data.metrics.agents[agentName]!;
+    delete agent.current_attempt;
 
     // Add attempt to array
     const attempt: AttemptData = {
