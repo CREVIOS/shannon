@@ -52,10 +52,12 @@ jobs:
             *) echo "Unsupported OS: ${RUNNER_OS}" && exit 1 ;;
           esac
           mkdir -p build
-          pnpm exec pkg dist/shannon.js --targets "${TARGET}" --output build/shannon
           if [ "${RUNNER_OS}" = "Windows" ]; then
-            mv build/shannon build/shannon.exe
+            OUTPUT="build/shannon.exe"
+          else
+            OUTPUT="build/shannon"
           fi
+          pnpm exec pkg dist/shannon.js --targets "${TARGET}" --output "${OUTPUT}" --no-bytecode
 
       - name: Package artifacts
         shell: bash

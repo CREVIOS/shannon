@@ -30,13 +30,23 @@ type SdkMcpServerResult = {
 type ShannonHelperServerFactory = (sourceDir: string) => SdkMcpServerResult;
 
 let createShannonHelperServer: ShannonHelperServerFactory | undefined;
-try {
-  // @ts-expect-error - Module may not exist if mcp-server is not built
-  const mcpModule = await import('../../mcp-server/dist/index.js');
-  createShannonHelperServer = mcpModule.createShannonHelperServer as ShannonHelperServerFactory;
-} catch {
-  // MCP server not built, will be undefined
-}
+let mcpLoadPromise: Promise<void> | null = null;
+
+const ensureMcpServerLoaded = async (): Promise<void> => {
+  if (createShannonHelperServer) return;
+  if (!mcpLoadPromise) {
+    mcpLoadPromise = (async () => {
+      try {
+        // @ts-expect-error - Module may not exist if mcp-server is not built
+        const mcpModule = await import('../../mcp-server/dist/index.js');
+        createShannonHelperServer = mcpModule.createShannonHelperServer as ShannonHelperServerFactory;
+      } catch {
+        // MCP server not built, will be undefined
+      }
+    })();
+  }
+  await mcpLoadPromise;
+};
 import type { SessionMetadata } from '../audit/utils.js';
 import type { PromptName } from '../types/index.js';
 
@@ -198,6 +208,8 @@ async function runClaudePrompt(
   let turnCount = 0;
 
   try {
+    await ensureMcpServerLoaded();
+
     // Create MCP server with target directory context (if available)
     const shannonHelperServer = createShannonHelperServer?.(sourceDir);
 
